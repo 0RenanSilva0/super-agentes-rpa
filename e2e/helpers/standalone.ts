@@ -62,6 +62,13 @@ export interface LaunchStandaloneOptions {
   /** Browser viewport (default 1280×800, the desktop shell). A phone-sized
    *  viewport renders the mobile shell instead. */
   viewport?: { width: number; height: number };
+  /** Pre-seed `~/.pixel-agents/layout.json` before the host starts (see
+   *  helpers/layout-seed.ts — it must carry a high layoutRevision). */
+  seedLayout?: unknown;
+  /** Extra top-level fields for the seeded `~/.pixel-agents/config.json`
+   *  (e.g. `directories`), merged over the consent baseline. Ignored when the
+   *  file already exists (a shared HOME was seeded by its owner). */
+  seedConfig?: Record<string, unknown>;
 }
 
 function delay(ms: number): Promise<void> {
@@ -293,9 +300,20 @@ export async function launchStandalone(
   // office in every spec. Only when the file does not exist yet — a shared
   // HOME (multi-server) was already seeded by the surface that owns it.
   const configPath = path.join(tmpHome, '.pixel-agents', 'config.json');
-  if ((options.seedHooksConsent ?? true) && !fs.existsSync(configPath)) {
-    fs.mkdirSync(path.dirname(configPath), { recursive: true });
-    fs.writeFileSync(configPath, JSON.stringify({ hooksConsent: { claude: 'granted' } }, null, 2));
+  if (!fs.existsSync(configPath)) {
+    const seeded = {
+      ...((options.seedHooksConsent ?? true) ? { hooksConsent: { claude: 'granted' } } : {}),
+      ...options.seedConfig,
+    };
+    if (Object.keys(seeded).length > 0) {
+      fs.mkdirSync(path.dirname(configPath), { recursive: true });
+      fs.writeFileSync(configPath, JSON.stringify(seeded, null, 2));
+    }
+  }
+  if (options.seedLayout !== undefined) {
+    const layoutPath = path.join(tmpHome, '.pixel-agents', 'layout.json');
+    fs.mkdirSync(path.dirname(layoutPath), { recursive: true });
+    fs.writeFileSync(layoutPath, JSON.stringify(options.seedLayout, null, 2));
   }
   const hostPort = await getFreePort();
   const hostUrl = `http://127.0.0.1:${hostPort}`;

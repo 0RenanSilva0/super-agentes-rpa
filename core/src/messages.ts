@@ -32,12 +32,17 @@ export type ServerMessage =
   | FloorTilesLoaded
   | WallTilesLoaded
   | CarpetTilesLoaded
+  | OfficeAccess
   | SettingsLoaded
+  | BypassPermissionsUpdated
   | HooksStatus
   | HooksConsentRequest
   | ExternalAssetDirectoriesUpdated
   | AreaMappingsLoaded
-  | WorkspaceFolders
+  | DirectoriesLoaded
+  | DirectorySaved
+  | DirectoryRejected
+  | DirectorySuggestions
   | TerminalAvailability
   | TerminalSessionOpened
   | TerminalSessionClosed
@@ -65,6 +70,10 @@ export type ClientMessage =
   | RemoveExternalAssetDirectory
   | SaveAreaMappings
   | SetShowAreas
+  | SetBypassPermissions
+  | SaveDirectory
+  | RemoveDirectory
+  | RequestDirectorySuggestions
   | RequestDiagnostics;
 
 export interface ProviderCapabilities {
@@ -76,7 +85,7 @@ export interface ProviderCapabilities {
 export interface AgentCreated {
   type: 'agentCreated';
   id: number;
-  folderName?: string;
+  directoryName?: string;
   isExternal?: boolean;
   palette?: number;
   hueShift?: number;
@@ -96,7 +105,7 @@ export interface ExistingAgents {
   type: 'existingAgents';
   agents: number[];
   agentMeta: Record<string, AgentSeatMeta>;
-  folderNames: Record<string, string>;
+  directoryNames: Record<string, string>;
   externalAgents: Record<string, boolean>;
 }
 
@@ -266,6 +275,11 @@ export interface CarpetTilesLoaded {
   sets: string[][][][];
 }
 
+export interface OfficeAccess {
+  type: 'officeAccess';
+  readOnly: boolean;
+}
+
 export interface SettingsLoaded {
   type: 'settingsLoaded';
   soundEnabled: boolean;
@@ -278,6 +292,12 @@ export interface SettingsLoaded {
   hooksInfoShown: boolean;
   externalAssetDirectories: string[];
   showAreas: boolean;
+  bypassPermissions: boolean;
+}
+
+export interface BypassPermissionsUpdated {
+  type: 'bypassPermissionsUpdated';
+  enabled: boolean;
 }
 
 export interface HooksStatus {
@@ -303,14 +323,33 @@ export interface AreaMappingsLoaded {
   mappings: Record<string, string[]>;
 }
 
-export interface WorkspaceFolders {
-  type: 'workspaceFolders';
-  folders: WorkspaceFolder[];
+export interface DirectoriesLoaded {
+  type: 'directoriesLoaded';
+  directories: Directory[];
 }
 
-export interface WorkspaceFolder {
+export interface Directory {
   name: string;
   path: string;
+  source: DirectorySource;
+}
+
+export type DirectorySource = 'user' | 'host';
+
+export interface DirectorySaved {
+  type: 'directorySaved';
+  directory: Directory;
+}
+
+export interface DirectoryRejected {
+  type: 'directoryRejected';
+  path: string;
+  reason: string;
+}
+
+export interface DirectorySuggestions {
+  type: 'directorySuggestions';
+  paths: string[];
 }
 
 export interface TerminalAvailability {
@@ -341,8 +380,7 @@ export interface WebviewReady {
 
 export interface LaunchAgent {
   type: 'launchAgent';
-  folderPath?: string;
-  bypassPermissions?: boolean;
+  directoryPath?: string;
 }
 
 export interface FocusAgent {
@@ -444,6 +482,27 @@ export interface SaveAreaMappings {
 export interface SetShowAreas {
   type: 'setShowAreas';
   enabled: boolean;
+}
+
+export interface SetBypassPermissions {
+  type: 'setBypassPermissions';
+  enabled: boolean;
+}
+
+export interface SaveDirectory {
+  type: 'saveDirectory';
+  name: string;
+  path: string;
+  previousPath?: string;
+}
+
+export interface RemoveDirectory {
+  type: 'removeDirectory';
+  path: string;
+}
+
+export interface RequestDirectorySuggestions {
+  type: 'requestDirectorySuggestions';
 }
 
 export interface RequestDiagnostics {

@@ -47,6 +47,20 @@ export const GLOBAL_SCAN_ACTIVE_MIN_SIZE = 3_072; // 3KB
 /** Only adopt global JSONL files modified within this window */
 export const GLOBAL_SCAN_ACTIVE_MAX_AGE_MS = 600_000; // 10 minutes
 
+// ── Directory Suggestions ───────────────────────────────────
+/** How much of a session transcript is read to recover the working directory it
+ *  records. The cwd sits on the first records, so the head is enough — whole
+ *  transcripts run to megabytes and there is one per session on the machine. */
+export const DIRECTORY_SUGGESTION_HEAD_BYTES = 8_192;
+/** Transcripts tried per session directory before moving on. Every session in
+ *  one directory shares a cwd (the directory name encodes it), so the extra
+ *  attempts only cover empty or half-written files. */
+export const DIRECTORY_SUGGESTION_FILES_PER_SESSION_DIR = 5;
+/** Upper bound on suggestions returned, so a long agent history can't flood the
+ *  Directory modal on a phone. The newest survive the cut — the list is ordered
+ *  by when a session last ran there. */
+export const DIRECTORY_SUGGESTION_LIMIT = 10;
+
 // ── Display Truncation + Pixel Agents Server paths ──────────
 // Centralized in core/src/constants.ts; re-exported here for back-compat.
 export {
@@ -133,6 +147,11 @@ export const TERMINAL_DISABLED_BY_FLAG_REASON = 'Terminal disabled with --no-ter
  *  gated exactly like the hooks toggle (wsAuth.standaloneHandshakeVerdict). */
 export const TERMINAL_REQUIRES_TOKEN_REASON =
   'Open the URL the CLI printed (with its ?token=), at localhost or a name passed with --allowed-host, to launch agents from this browser.';
+/** directoryRejected reason when the shared config write behind a Directory
+ *  save or delete failed. The detail (permissions, disk full, ...) is on the
+ *  host's console, where writeConfig logged it. */
+export const DIRECTORY_WRITE_FAILED_REASON =
+  "Couldn't save the change: writing ~/.pixel-agents/config.json failed (see the host's log).";
 /** Standalone persists its server token here (mode 0600, beside server.json) so
  *  the tokened URL a browser bookmarked keeps working across restarts. The
  *  embedded (VS Code) server still mints a fresh token per process. */
