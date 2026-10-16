@@ -83,12 +83,42 @@ webview-ui/                          React 19 + Canvas UI (depends only on core/
     components/                      React UI (toolbars, modals, settings)
       BottomToolbar.tsx, ZoomControls.tsx, SettingsModal.tsx, InfoModal.tsx,
       Tooltip.tsx, DebugView.tsx, ui/Button.tsx, ...
+      AgentCard.tsx, AgentCardBar.tsx  Agent cards (mug shot + status dot); the right-edge bar on desktop/VS Code
+      cardBar.ts                     Pure card-bar rules: cardVariant, mergeOrder, reorderByPointer (Node-tested)
+      TerminalDrawer.tsx             Desktop standalone: right-docked panel, cards as tabs
+      TerminalPaneStack.tsx          Every agent's TerminalPane mounted, the shown one visible (both shells)
+      TerminalPane.tsx               One xterm bound to one agent's PTY
+      MobileAgentBar.tsx             Mobile bottom card scroller (+ launch card, long-press reorder)
+      MobileTerminalPage.tsx         Mobile terminal page (a TerminalPaneStack)
+      MobileKeyBar.tsx               Accessory keys above the software keyboard (esc, shift+tab, trackpad, paste)
+    mobile/                          The phone shell (standalone only, see "Mobile shell")
+      MobileShell.tsx                Sliding office/terminal track + card bar + key bar
+      useMobileShell.ts              Page state and navigation rules (toggle, card tap, launch-then-slide)
+      edgeSwipe.ts                   Edge-swipe state machine (pure reducer, Node-runner tested)
+      keyboardViewport.ts            Software-keyboard decision: open vs per-width baseline, clamp only when the visual viewport is shorter (pure)
+      useEdgeSwipe.ts                DOM adapter for the reducer (capture listeners, detached-target rescue)
+    touch/
+      touchPrimitives.ts             findTouch (track one finger by id) + withinTapSlop (the one tap metric)
+    terminal/                        Standalone terminal (xterm) support
+      terminalClient.ts              /terminal/:agentId socket (reconnect, replay)
+      terminalLinks.ts               Safe link opener + urlAtCell (one URL pattern for clicks and taps)
+      touchGesture.ts                Terminal touch state machine: scroll, flick, tap, long-press select, handles (pure reducer)
+      touchInput.ts                  DOM adapter: listeners, flick rAF, long-press timer, detached-target rescue
+      selectionMath.ts               Word expansion, range ordering, handle clamping (pure)
+      selectionOverlay.ts            Copy pill (Copy | Copy as text) + selection handles (DOM; styled in index.css)
+      clipboard.ts                   The one clipboard write/read: Clipboard API on secure origins; plain http falls back to a copy event (write) / a native prompt (paste)
+      flowCopy.ts                    terminalCopyText: verbatim by default; opt-in re-flow of Claude Code's soft wraps (pure)
+      clipboardKeys.ts               Clipboard chords (Ctrl+C/Ctrl+Shift+C copy, Alt+C copy as text, Ctrl+V paste) + OSC 52 decode (pure)
+      terminalDom.ts                 xterm screen geometry + isTypingInTerminal
     hooks/
       useExtensionMessages.ts        Message handler — translates ServerMessage into OfficeState mutations
       useEditorActions.ts            Editor state + callbacks
       useEditorKeyboard.ts           Keyboard shortcuts (R, T, Esc, Ctrl+Z/Y)
       introTourState.ts              Intro tour wire-state machine (pure reducer, Node-runner tested)
       useIntroTour.ts                Wires the reducer to React + transport (snapshot, verdict, choices)
+      useTerminalDrawer.ts           Terminal-pane model for both shells: active/shown pane, socket status, card lookups
+      useIsMobile.ts                 Mobile breakpoint — always false in the VS Code webview
+      useKeyboardViewport.ts         Samples the viewport: keyboard open (key bar) + iOS shell clamp height
     office/
       types.ts                       OfficeLayout, Character, etc. + re-exports constants
       toolUtils.ts                   STATUS_TO_TOOL mapping, extractToolName (DOM-free; defaultZoom lives in useEditorActions)
@@ -116,7 +146,8 @@ webview-ui/                          React 19 + Canvas UI (depends only on core/
         matrixEffectState.ts         Effect state: startMatrixEffect/advanceMatrixEffect (DOM-free)
       components/
         OfficeCanvas.tsx             Canvas, resize, DPR, mouse hit-testing, drag-to-move
-        ToolOverlay.tsx              Activity label above hovered/selected character
+        useCanvasTouchGestures.ts    Touch pan / pinch zoom / tap on the canvas
+        ToolOverlay.tsx              Activity label + speech bubbles (DOM, above the labels) per character
 
 e2e/                                 Playwright suite (real VS Code + mock-claude scenarios)
   playwright.config.ts
@@ -393,6 +424,8 @@ Custom ESLint rules (`eslint-rules/pixel-agents-rules.mjs`) enforce: `no-inline-
 
 **Sound notifications**: Ascending two-note chime (E5 → E6) via Web Audio API plays when waiting bubble appears (`agentStatus: 'waiting'`). `notificationSound.ts` manages AudioContext lifecycle; `unlockAudio()` on canvas mousedown resumes the context (webviews start suspended). Toggled via Settings modal. Persisted per-namespace in `~/.pixel-agents/config.json`.
 
+**Mobile shell** (standalone only): below `MOBILE_MEDIA_QUERY` the browser renders `mobile/MobileShell` instead of the desktop layout — office and terminal as two full-screen pages in a 200%-wide sliding track (both always laid out, never `display:none`, so the canvas and xterm keep dimensions); the track's transform makes it the containing block of `position: fixed`, so modals and other viewport overlays mount at App's top level, never inside the office region), the agent cards in a bottom scroller, and `MobileKeyBar` above the software keyboard. "Keyboard open" and "clamp the shell" are separate answers (`mobile/keyboardViewport.ts`, sampled by `useKeyboardViewport`) because the two resize policies differ: iOS shrinks only the visual viewport (open, and the shell is clamped to it so the PTY resizes instead of hiding its input line), Android `interactive-widget=resizes-content` shrinks both (open, nothing to clamp). Open = an editable focused AND the visual viewport `KEYBOARD_MIN_HEIGHT_PX` below the tallest height seen at the current width (per-orientation baseline). `useIsMobile` is gated on `isBrowserRuntime`: a narrow VS Code panel must never get it (it broke every VS Code e2e shard once). Navigation rules live in `useMobileShell`: the >_ / Office toggle and the edge swipe share one handler; a card tap in the office is two-step (focus the character, then open its terminal), in the terminal it switches panes; + slides over only for launches made from it (a reload re-announcing sessions stays on the office). The terminal-pane model (active vs shown pane, socket status, `statusFor`) is `useTerminalDrawer`, shared with the desktop drawer. Touch rules: every gesture tracks ONE finger by identifier (`findTouch`) and uses one tap slop (`withinTapSlop`); gesture decisions are pure reducers with thin DOM adapters (`edgeSwipe.ts`/`useEdgeSwipe.ts`, `terminal/touchGesture.ts`/`touchInput.ts`), because WebKit keeps addressing a gesture's events to its touchstart node — when terminal rows repaint, that node detaches and events stop bubbling, so each adapter binds "rescue" listeners on the touch target. **Terminal copy is verbatim by default** (Cmd/Ctrl+C, the browser's Copy, the pill's Copy): `flowTerminalCopy` is a heuristic that joins a long row with a two-space-indented next line, which is also what YAML under a long key or a method body under a long signature look like, so re-flowing is opt-in only — Alt+C (Option+C) on desktop, "Copy as text" on the pill. Every write goes through `terminal/clipboard.ts`. PWA: `manifest.webmanifest` (icon paths relative — the file is served verbatim), conventional-path icons in `public/`, `?v=N` cache-busters on icon links.
+
 **Seats**: Derived from chair furniture. `layoutToSeats()` creates a seat at every footprint tile of every chair. Multi-tile chairs produce multiple seats keyed `uid` / `uid:1` / `uid:2`. Facing direction priority: 1) chair `orientation` from catalog (front→DOWN, back→UP, left→LEFT, right→RIGHT), 2) adjacent desk direction, 3) forward (DOWN). Click character → select (white outline) → click available seat → reassign.
 
 ## Layout Editor
@@ -482,6 +515,11 @@ Run: `npm run test:webview`.
 ### End-to-end (Playwright)
 
 `e2e/` contains Playwright tests against a real VS Code Electron instance and a standalone Fastify server. CI runs the suite on Linux, macOS, and Windows in three shards at `--workers=1`. The generated [e2e inventory](e2e/README.md) is the source of truth for current specs, scenarios, and `@area:` coverage.
+
+**Running VS Code e2e locally needs explicit approval.** The VS Code specs (`e2e/tests/claude/**`) launch real VS Code windows one after another, which cover the screen and steal keyboard focus from whatever the user is typing in. Ask the user before running any of them, and when approved:
+
+- Run them **once, at the end of an implementation** — never as an intermediate check.
+- **Never from a subagent**: delegated work verifies with typecheck, lint, unit tests, and the standalone specs (`e2e/tests/standalone/**`, headless browser, no windows).
 
 **Mock claude**: Tests never invoke real `claude`. A bash script (`e2e/fixtures/mock-claude`) is copied into an isolated `bin/` and prepended to `PATH`. The scenario runner (`mock-claude-runner.cjs`) honors `claudeScenario(...).at(ms).appendJsonl(record).emitHook(event).holdOpenFor(ms).build()` to drive timed JSONL writes and hook events.
 

@@ -247,6 +247,10 @@ under an unlisted `Host` stays watch-only and the server logs the `--allowed-hos
   go through `terminalLinkOpener`, which opens only `http:`/`https:` in a new tab with
   `noopener,noreferrer`. xterm's default OSC 8 activator opens any scheme (`javascript:`,
   `file:`, OS protocol handlers) into a same-origin popup behind a generic `confirm()`.
+  Touch is separate: the pane's touch handling prevents every default, which also suppresses the
+  synthesized click link providers need, so a tap looks up the plain URL under the tapped cell
+  itself (`urlAtCell`, same pattern as the addon) and sends it through the same opener. OSC 8
+  links are click-only, since xterm exposes no public per-cell link lookup.
 - Every token comparison in the server -- hook Bearer, embedded `/ws` Bearer, standalone `/ws`
   and terminal `?token=` -- goes through the one `timingSafeStringEqual` in `wsAuth.ts`.
 - The PTY inherits the server's uid/gid — no privilege boundary is claimed or implied. This
@@ -330,6 +334,11 @@ reload reattaches to a still-running Claude session.
   viewport so the card bar stays on screen), one tab per PTY-backed agent, character-click
   focuses its tab (a Teammate's focuses its Lead's),
   standalone-only, pixel-art chrome + mono terminal content, xterm assets bundled (no CDN).
+- Clipboard: every copy is verbatim (Cmd/Ctrl+C, Ctrl+Shift+C, the browser's Copy, the
+  phone's Copy pill). Re-flowing Claude Code's two-space soft wraps into prose is opt-in —
+  Alt+C / Option+C with a selection, or the pill's "Copy as text" — because the heuristic
+  can't tell a soft wrap from indented structure under a long row (YAML, code). Writes go
+  through `terminal/clipboard.ts` (Clipboard API, or a copy event on plain-http origins).
 - Distribution: esbuild externals, `package.json` `optionalDependencies` + `files`.
 - Server unit tests: session manager lifecycle, WS auth, message framing.
 
